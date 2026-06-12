@@ -46,6 +46,8 @@ jobs:
           MODE="${{ github.event.inputs.mode || 'daily' }}"
           if [ "$MODE" = "backtest" ]; then
             python backtest.py
+          elif [ "$MODE" = "backtest2" ]; then
+            python backtest_v2.py
           else
             python scanner.py "$MODE"
           fi

@@ -1,0 +1,65 @@
+name: NSE Daily Momentum Scan
+
+on:
+  schedule:
+    # All times IST. First attempts: 19:15, 20:15, 22:00.
+    # Then overnight retries every ~3h until NSE publishes: 01:00, 04:00,
+    # 07:00, 10:00 (next morning, hence Tue-Sat for Mon-Fri data).
+    # The script emails only when fresh data is found, so you always get
+    # exactly one real report per trading day, whenever NSE publishes.
+    - cron: "45 13 * * 1-5"
+    - cron: "45 14 * * 1-5"
+    - cron: "30 16 * * 1-5"
+    - cron: "30 19 * * 1-5"
+    - cron: "30 22 * * 1-5"
+    - cron: "30 1 * * 2-6"
+    - cron: "30 4 * * 2-6"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode (daily or backfill)"
+        default: "daily"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scanner
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RECIPIENT: ${{ secrets.RECIPIENT }}
+        run: |
+          MODE="${{ github.event.inputs.mode || 'daily' }}"
+          if [ "$MODE" = "backtest" ]; then
+            python backtest.py
+          elif [ "$MODE" = "backtest2" ]; then
+            python backtest_v2.py
+          elif [ "$MODE" = "backfill-multi" ]; then
+            python backfill_multi.py
+          elif [ "$MODE" = "rotation" ]; then
+            python rotation_backtest.py
+          else
+            python scanner.py "$MODE"
+          fi
+
+      - name: Commit updated history
+        run: |
+          git config user.name "scanner-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "data update $(date -u +%F)"
+          git push

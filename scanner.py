@@ -363,17 +363,52 @@ def main() -> None:
         backfill()
         return
 
-    fetch_today()
+    got_new = fetch_today()
     history = load_history()
     if history.empty:
         print("No history. Run: python scanner.py backfill")
         sys.exit(1)
     scan_date = history["date"].max()
+
+    # If no fresh data on a weekday, stay silent and let the next scheduled
+    # retry handle it (retries continue every ~3h overnight). The 22:00 IST
+    # run sends a one-time "delayed" notice so you know why the report is
+    # late; the real report arrives automatically whenever NSE publishes.
+    today = date.today()
+    utc_hour = datetime.utcnow().hour
+    is_delay_notice_run = utc_hour == 16   # the 22:00 IST attempt only
+    if not got_new and today.weekday() < 5 and scan_date != today.isoformat():
+        if is_delay_notice_run:
+            send_notice(
+                f"NSE Scan {today}: data delayed",
+                "<p>NSE has not yet published today's bhavcopy (holiday or "
+                "delay). Retries continue every ~3 hours; the report will "
+                "arrive automatically once data is available. Latest scanned "
+                f"data remains {scan_date}.</p>")
+        else:
+            print(f"No fresh data yet (latest: {scan_date}). "
+                  "Skipping email; next retry is scheduled.")
+        return
+
     shortlist = scan(history)
     print(f"\nScan for {scan_date}: {len(shortlist)} candidates")
     if not shortlist.empty:
         print(shortlist.to_string(index=False))
     send_email(shortlist, scan_date)
+
+
+def send_notice(subject: str, html_body: str) -> None:
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+        print(subject)
+        return
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = GMAIL_USER
+    msg["To"] = RECIPIENT
+    msg.attach(MIMEText(html_body, "html"))
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+        server.send_message(msg)
 
 
 if __name__ == "__main__":

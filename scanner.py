@@ -233,6 +233,8 @@ def scan(history: pd.DataFrame) -> pd.DataFrame:
     results = []
 
     for symbol, g in history.groupby("symbol"):
+        if looks_like_etf(symbol):
+            continue
         g = g.reset_index(drop=True)
         if len(g) < 60 or g.iloc[-1]["date"] != latest_date:
             continue

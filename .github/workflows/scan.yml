@@ -42,7 +42,13 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           RECIPIENT: ${{ secrets.RECIPIENT }}
-        run: python scanner.py ${{ github.event.inputs.mode || 'daily' }}
+        run: |
+          MODE="${{ github.event.inputs.mode || 'daily' }}"
+          if [ "$MODE" = "backtest" ]; then
+            python backtest.py
+          else
+            python scanner.py "$MODE"
+          fi
 
       - name: Commit updated history
         run: |

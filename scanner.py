@@ -96,10 +96,51 @@ def fetch_bhavcopy(d: date, session: requests.Session) -> pd.DataFrame | None:
             keep.append(col)
     df = df[[c for c in keep if c in df.columns]].copy()
     df = df[df["series"] == "EQ"]
+    df = df[~df["symbol"].apply(looks_like_etf)]
     df["date"] = d.isoformat()
     if "delivery_pct" not in df.columns:
         df["delivery_pct"] = float("nan")
+    # merge security-wise delivery data (separate NSE file)
+    dlv = fetch_delivery(d, session)
+    if dlv is not None and not dlv.empty:
+        df = df.drop(columns=["delivery_pct"]).merge(dlv, on="symbol", how="left")
     return df
+
+
+def fetch_delivery(d: date, session: requests.Session) -> pd.DataFrame | None:
+    """NSE security-wise delivery (MTO) file: symbol -> delivery %."""
+    url = ("https://nsearchives.nseindia.com/archives/equities/mto/"
+           f"MTO_{d.strftime('%d%m%Y')}.DAT")
+    try:
+        r = session.get(url, headers=HEADERS, timeout=30)
+    except requests.RequestException:
+        return None
+    if r.status_code != 200 or len(r.content) < 200:
+        return None
+    rows = []
+    for line in r.text.splitlines():
+        parts = line.split(",")
+        # data records start with "20": rec,srno,symbol,series,traded,delivered,pct
+        if len(parts) >= 7 and parts[0].strip() == "20" and parts[3].strip() == "EQ":
+            try:
+                rows.append({"symbol": parts[2].strip(),
+                             "delivery_pct": float(parts[6])})
+            except ValueError:
+                continue
+    return pd.DataFrame(rows) if rows else None
+
+
+# crude ETF/non-stock symbol filter (ETFs often trade in EQ series)
+ETF_KEYWORDS = ("ETF", "BEES", "BETA", "NIFTY", "SENSEX", "GOLD", "SILVER",
+                "LIQUID", "GILT", "SDL", "GSEC", "MAFANG", "MON100", "MOM50",
+                "ALPHA", "QUAL", "VALUE", "LOWVOL", "MOMENTUM", "IT", "PSUBNK",
+                "PVTBAN", "HDFCM", "ICICIM", "ABSLN", "UTIN", "KOTAKN")
+
+
+def looks_like_etf(symbol: str) -> bool:
+    s = symbol.upper()
+    return any(k in s for k in ("ETF", "BEES", "BETA", "IETF", "NETF")) or \
+        s.endswith(("NIFTY", "GOLD", "SILVER", "LIQUID"))
 
 
 def warm_session() -> requests.Session:

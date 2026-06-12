@@ -52,6 +52,8 @@ jobs:
             python backfill_multi.py
           elif [ "$MODE" = "rotation" ]; then
             python rotation_backtest.py
+          elif [ "$MODE" = "tournament" ]; then
+            python strategy_tournament.py
           else
             python scanner.py "$MODE"
           fi

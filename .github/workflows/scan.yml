@@ -2,8 +2,18 @@ name: NSE Daily Momentum Scan
 
 on:
   schedule:
-    # 13:45 UTC = 19:15 IST, Mon-Fri (after bhavcopy is published ~6:30-7 PM)
+    # All times IST. First attempts: 19:15, 20:15, 22:00.
+    # Then overnight retries every ~3h until NSE publishes: 01:00, 04:00,
+    # 07:00, 10:00 (next morning, hence Tue-Sat for Mon-Fri data).
+    # The script emails only when fresh data is found, so you always get
+    # exactly one real report per trading day, whenever NSE publishes.
     - cron: "45 13 * * 1-5"
+    - cron: "45 14 * * 1-5"
+    - cron: "30 16 * * 1-5"
+    - cron: "30 19 * * 1-5"
+    - cron: "30 22 * * 1-5"
+    - cron: "30 1 * * 2-6"
+    - cron: "30 4 * * 2-6"
   workflow_dispatch:
     inputs:
       mode:
@@ -18,9 +28,9 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
